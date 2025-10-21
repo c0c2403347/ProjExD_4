@@ -242,6 +242,29 @@ class Score:
         screen.blit(self.image, self.rect)
 
 
+class Gravity(pg.sprite.Sprite):
+    """
+    画面全体を覆う「重力場」クラス
+    ・半透明の黒い矩形を描画
+    ・life(発動時間)のあいだ有効
+    ・範囲内の爆弾/敵機に衝突扱いを起こし，爆発エフェクト生成のうえ削除
+    """
+    def __init__(self, life: int = 400):
+        super().__init__()
+        # 画面全体サイズのSurfaceを作成（半透明の黒）
+        self.image = pg.Surface((WIDTH, HEIGHT))
+        self.image.fill((0, 0, 0))
+        self.image.set_alpha(140) 
+        self.rect = self.image.get_rect(topleft=(0, 0))
+        self.life = life  # 発動時間（フレーム）
+
+    def update(self):
+        # スライドの実装例に合わせて life を毎フレーム減算し，0でkill
+        self.life -= 1
+        if self.life <= 0:
+            self.kill()
+
+
 def main():
     pg.display.set_caption("真！こうかとん無双")
     screen = pg.display.set_mode((WIDTH, HEIGHT))
@@ -253,6 +276,7 @@ def main():
     beams = pg.sprite.Group()
     exps = pg.sprite.Group()
     emys = pg.sprite.Group()
+    gravs = pg.sprite.Group()  # 重力場グループ（実装例にあるとおり追加）
 
     tmr = 0
     clock = pg.time.Clock()
@@ -263,6 +287,12 @@ def main():
                 return 0
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
                 beams.add(Beam(bird))
+            # === 重力場の発動（Enterキー & スコアが200以上 & 未発動時） ===
+            if event.type == pg.KEYDOWN and event.key == pg.K_RETURN:
+                if score.value >= 200 and len(gravs) == 0:
+                    gravs.add(Gravity(life=400))  # 発動時間：400フレーム
+                    score.value -= 200                 # 消費スコア：200
+
         screen.blit(bg_img, [0, 0])
 
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
@@ -282,6 +312,13 @@ def main():
             exps.add(Explosion(bomb, 50))  # 爆発エフェクト
             score.value += 1  # 1点アップ
 
+        # 重力場の効果：範囲内の爆弾/敵機を爆発させて削除
+        for g in gravs:
+            for bomb in pg.sprite.spritecollide(g, bombs, True):
+                exps.add(Explosion(bomb, 50))
+            for emy in pg.sprite.spritecollide(g, emys, True):
+                exps.add(Explosion(emy, 100))
+
         for bomb in pg.sprite.spritecollide(bird, bombs, True):  # こうかとんと衝突した爆弾リスト
             bird.change_img(8, screen)  # こうかとん悲しみエフェクト
             score.update(screen)
@@ -296,6 +333,11 @@ def main():
         emys.draw(screen)
         bombs.update()
         bombs.draw(screen)
+
+        # 重力場は半透明のオーバーレイなので最後に描画
+        gravs.update()
+        gravs.draw(screen)
+
         exps.update()
         exps.draw(screen)
         score.update(screen)
